@@ -57,7 +57,7 @@ var (
 func TestMain(m *testing.M) {
 	dbx, err := sqlx.Connect("mysql", "dbtester:Passw0rd!@tcp(127.0.0.1:3306)/chattest?collation=utf8mb4_bin&interpolateParams=true&parseTime=true&maxAllowedPacket=0")
 	if err != nil {
-		log.Fatalf("sqlx.Connect: %v", err)
+		log.Fatalf("sqlx.Connect: %+v", err)
 	}
 	dbx.MustExec(DropSession)
 	dbx.MustExec(DropUser)
@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 
 	db, err = sqlxx.Open(dbx)
 	if err != nil {
-		log.Fatalf("sqlx.Connect: %v", err)
+		log.Fatalf("sqlx.Connect: %+v", err)
 	}
 
 	os.Exit(m.Run())
@@ -84,7 +84,7 @@ func testDB(t *testing.T, db Database) {
 	// --------------------
 	u, err := NewUser("abc@example.com", "Passw0rd!")
 	if err != nil {
-		t.Fatalf("NewUser returned error: %v", err)
+		t.Fatalf("NewUser returned error: %+v", err)
 	}
 	s := NewSession(u)
 	ctx := context.Background()
@@ -94,7 +94,7 @@ func testDB(t *testing.T, db Database) {
 	// --------------------
 	s, err = db.CreateUser(ctx, s)
 	if err != nil {
-		t.Fatalf("CreateUser returned error: %v", err)
+		t.Fatalf("CreateUser returned error: %+v", err)
 	}
 	if s.User.ID == 0 {
 		t.Fatalf("CreateUser did not return user id: got %d", s.User.ID)
@@ -111,7 +111,7 @@ func testDB(t *testing.T, db Database) {
 	// --------------------
 	s, err = db.CreateSession(ctx, s)
 	if err != nil {
-		t.Fatalf("CreateSession returned error: %v", err)
+		t.Fatalf("CreateSession returned error: %+v", err)
 	}
 	_, err = db.CreateSession(ctx, s)
 	if err == nil {
@@ -125,7 +125,7 @@ func testDB(t *testing.T, db Database) {
 	// --------------------
 	gotUserByID, err := db.GetUserByID(ctx, s.User.ID)
 	if err != nil {
-		t.Fatalf("GetUserByID returned error: %v", err)
+		t.Fatalf("GetUserByID returned error: %+v", err)
 	}
 	if diff := cmp.Diff(gotUserByID, s.User); diff != "" {
 		t.Fatalf("GetUserByID returned wrong result: \n%s", diff)
@@ -142,7 +142,7 @@ func testDB(t *testing.T, db Database) {
 	// --------------------
 	gotUserByEmail, err := db.GetUserByEmail(ctx, s.User.Email)
 	if err != nil {
-		t.Fatalf("GetUserByEmail returned error: %v", err)
+		t.Fatalf("GetUserByEmail returned error: %+v", err)
 	}
 	if diff := cmp.Diff(gotUserByEmail, s.User); diff != "" {
 		t.Fatalf("GetUserByEmail returned wrong result: \n%s", diff)
@@ -159,7 +159,7 @@ func testDB(t *testing.T, db Database) {
 	// --------------------
 	gotSessionByID, err := db.GetSessionByID(ctx, s.ID)
 	if err != nil {
-		t.Fatalf("GetSessionByID returned error: %v", err)
+		t.Fatalf("GetSessionByID returned error: %+v", err)
 	}
 	if diff := cmp.Diff(gotSessionByID, s); diff != "" {
 		t.Fatalf("GetSessionByID returned wrong result: \n%s", diff)
@@ -169,5 +169,90 @@ func testDB(t *testing.T, db Database) {
 		t.Fatalf("GetSessionByID want non-nil error")
 	} else {
 		t.Logf("%+v", err)
+	}
+
+	// --------------------
+	// RunInTx
+	// --------------------
+	switch db := db.(type) {
+	case *MySQL:
+		testMySQLRunInTx(t, db)
+	}
+}
+
+func testMySQLRunInTx(t *testing.T, db *MySQL) {
+	t.Helper()
+
+	// --------------------
+	// setup
+	// --------------------
+	email1 := "mysql-tx-test-1@example.com"
+	email2 := "mysql-tx-test-2@example.com"
+	ctx := context.Background()
+
+	// --------------------
+	// transaction 1（success）
+	// --------------------
+	txFn1 := func(ctx context.Context) (interface{}, error) {
+		u, err := NewUser(email1, "Passw0rd!")
+		if err != nil {
+			t.Fatalf("NewUser returned error: %+v", err)
+		}
+		s := NewSession(u)
+
+		s, err = db.CreateUser(ctx, s)
+		if err != nil {
+			return s, err
+		}
+		return db.CreateSession(ctx, s)
+	}
+	v, err, rberr := db.RunInTx(ctx, txFn1)
+	if rberr != nil {
+		t.Fatalf("RunInTx returned rollback error: %+v", rberr)
+	}
+	if err != nil {
+		t.Fatalf("RunInTx returned error: %+v", err)
+	}
+	s, ok := v.(*Session)
+	if !ok {
+		t.Fatalf("RunInTx result is not *Session. got %T", v)
+	}
+	registeredSessionID := s.ID
+
+	// ----------------------------------------
+	// transaction 2（failuer and rollback）
+	// ----------------------------------------
+	txFn2 := func(ctx context.Context) (interface{}, error) {
+		u, err := NewUser(email2, "Passw0rd!")
+		if err != nil {
+			t.Fatalf("NewUser returned error: %+v", err)
+		}
+		s := NewSession(u)
+		s.ID = registeredSessionID // trigger duplicate entry error
+
+		s, err = db.CreateUser(ctx, s)
+		if err != nil {
+			return s, err
+		}
+		return db.CreateSession(ctx, s) // expect to occur duplicate entry error
+	}
+	_, err, rberr = db.RunInTx(ctx, txFn2)
+	if rberr != nil {
+		t.Fatalf("RunInTx returned rollback error: %+v", rberr)
+	}
+	if err == nil {
+		t.Fatalf("RunInTx want non-nil error")
+	} else {
+		t.Logf("MySQL.RunInTx: transaction2:\n%+v", err)
+	}
+
+	// --------------------
+	// rollback check
+	// --------------------
+	_, err = db.GetUserByEmail(ctx, email2)
+	if err == nil {
+		t.Fatalf("want non-nil error. RunInTx failed to rollback.")
+	} else {
+		t.Logf("MySQL.RunInTx: rollback check:\n%+v", err)
 	}
 }

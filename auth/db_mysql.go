@@ -18,7 +18,7 @@ type MySQL struct {
 func (m *MySQL) RunInTx(
 	ctx context.Context,
 	txFn func(ctx context.Context) (interface{}, error),
-) (interface{}, error, error) {
+) (v interface{}, err error, rberr error) {
 	return m.db.RunInTx(ctx, txFn)
 }
 
