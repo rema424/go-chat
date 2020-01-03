@@ -8,4 +8,5 @@ type Database interface {
 	CreateSession(ctx context.Context, s *Session) (*Session, error)
 	GetUserByID(ctx context.Context, id int64) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	GetSessionByID(ctx context.Context, id string) (*Session, error)
 }

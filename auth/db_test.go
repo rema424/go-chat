@@ -102,6 +102,8 @@ func testDB(t *testing.T, db Database) {
 	_, err = db.CreateUser(ctx, s)
 	if err == nil {
 		t.Fatalf("CreateUser want non-nil error")
+	} else {
+		t.Logf("%+v", err)
 	}
 
 	// --------------------
@@ -114,6 +116,8 @@ func testDB(t *testing.T, db Database) {
 	_, err = db.CreateSession(ctx, s)
 	if err == nil {
 		t.Fatalf("CreateSession want non-nil error")
+	} else {
+		t.Logf("%+v", err)
 	}
 
 	// --------------------
@@ -129,6 +133,8 @@ func testDB(t *testing.T, db Database) {
 	_, err = db.GetUserByID(ctx, 9999)
 	if err == nil {
 		t.Fatalf("GetUserByID want non-nil error")
+	} else {
+		t.Logf("%+v", err)
 	}
 
 	// --------------------
@@ -144,5 +150,24 @@ func testDB(t *testing.T, db Database) {
 	_, err = db.GetUserByEmail(ctx, "abcdef")
 	if err == nil {
 		t.Fatalf("GetUserByEmail want non-nil error")
+	} else {
+		t.Logf("%+v", err)
+	}
+
+	// --------------------
+	// GetSessionByID
+	// --------------------
+	gotSessionByID, err := db.GetSessionByID(ctx, s.ID)
+	if err != nil {
+		t.Fatalf("GetSessionByID returned error: %v", err)
+	}
+	if diff := cmp.Diff(gotSessionByID, s); diff != "" {
+		t.Fatalf("GetSessionByID returned wrong result: \n%s", diff)
+	}
+	_, err = db.GetSessionByID(ctx, "abcdef")
+	if err == nil {
+		t.Fatalf("GetSessionByID want non-nil error")
+	} else {
+		t.Logf("%+v", err)
 	}
 }

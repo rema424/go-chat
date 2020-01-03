@@ -62,3 +62,23 @@ func (m *MySQL) GetUserByEmail(ctx context.Context, email string) (*User, error)
 	}
 	return &u, nil
 }
+
+func (m *MySQL) GetSessionByID(ctx context.Context, id string) (*Session, error) {
+	q := `
+  SELECT
+    s.id,
+    s.csrf,
+    s.expire_at,
+    u.id AS 'user.id',
+    u.email AS 'user.email',
+    u.password AS 'user.password'
+  FROM session AS s
+  INNER JOIN user AS u ON u.id = s.user_id
+  WHERE s.id = ?;
+  `
+	var s Session
+	if err := m.db.Get(ctx, &s, q, id); err != nil {
+		return &s, xerrors.Errorf(": %w", err)
+	}
+	return &s, nil
+}
