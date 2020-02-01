@@ -13,7 +13,6 @@ package auth
 import (
 	"context"
 	"log"
-	"os"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -50,11 +49,7 @@ const DropSession = `
 drop table if exists session;
 `
 
-var (
-	db *sqlxx.Accessor
-)
-
-func TestMain(m *testing.M) {
+func TestMySQL(t *testing.T) {
 	dbx, err := sqlx.Connect("mysql", "dbtester:Passw0rd!@tcp(127.0.0.1:3306)/chattest?collation=utf8mb4_bin&interpolateParams=true&parseTime=true&maxAllowedPacket=0")
 	if err != nil {
 		log.Fatalf("sqlx.Connect: %+v", err)
@@ -64,15 +59,11 @@ func TestMain(m *testing.M) {
 	dbx.MustExec(CreateUser)
 	dbx.MustExec(CreateSession)
 
-	db, err = sqlxx.Open(dbx)
+	db, err := sqlxx.Open(dbx)
 	if err != nil {
 		log.Fatalf("sqlx.Connect: %+v", err)
 	}
 
-	os.Exit(m.Run())
-}
-
-func TestMySQL(t *testing.T) {
 	testDB(t, NewMySQL(db))
 }
 
@@ -190,13 +181,13 @@ func testMySQLRunInTx(t *testing.T, db *MySQL) {
 	email2 := "mysql-tx-test-2@example.com"
 	ctx := context.Background()
 
-	// --------------------
+	// ----------------------------------------
 	// transaction 1（success）
-	// --------------------
+	// ----------------------------------------
 	txFn1 := func(ctx context.Context) (interface{}, error) {
 		u, err := NewUser(email1, "Passw0rd!")
 		if err != nil {
-			t.Fatalf("NewUser returned error: %+v", err)
+			t.Fatal(err)
 		}
 		s := NewSession(u)
 
@@ -225,7 +216,7 @@ func testMySQLRunInTx(t *testing.T, db *MySQL) {
 	txFn2 := func(ctx context.Context) (interface{}, error) {
 		u, err := NewUser(email2, "Passw0rd!")
 		if err != nil {
-			t.Fatalf("NewUser returned error: %+v", err)
+			t.Fatal(err)
 		}
 		s := NewSession(u)
 		s.ID = registeredSessionID // trigger duplicate entry error
@@ -246,9 +237,9 @@ func testMySQLRunInTx(t *testing.T, db *MySQL) {
 		t.Logf("MySQL.RunInTx: transaction2:\n%+v", err)
 	}
 
-	// --------------------
+	// ----------------------------------------
 	// rollback check
-	// --------------------
+	// ----------------------------------------
 	_, err = db.GetUserByEmail(ctx, email2)
 	if err == nil {
 		t.Fatalf("want non-nil error. RunInTx failed to rollback.")
