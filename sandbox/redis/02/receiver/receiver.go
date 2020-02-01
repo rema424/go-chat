@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"chat/sandbox/terminal"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -25,13 +23,24 @@ var pool = &redis.Pool{
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("ERROR: not enough args")
+		os.Exit(1)
+	}
+
+	channels := make([]interface{}, len(os.Args[1:]))
+	for i, v := range os.Args[1:] {
+		channels[i] = v
+	}
+
 	fmt.Println("hello, i am receiver.")
+
 	c := pool.Get()
 	defer c.Close()
 	psc := redis.PubSubConn{Conn: c}
 	defer psc.Close()
 
-	if err := psc.Subscribe("my-first-channel"); err != nil {
+	if err := psc.Subscribe(channels...); err != nil {
 		panic(err)
 	}
 
@@ -48,26 +57,6 @@ func main() {
 			fmt.Printf(terminal.Green("msg: channel: %s, data: %s\n"), n.Channel, string(n.Data))
 		case redis.Subscription:
 			fmt.Printf(terminal.Blue("sub: kind: %s, channel: %s, count: %d\n"), n.Kind, n.Channel, n.Count)
-
 		}
-	}
-
-	// sendLoop(os.Stdin, os.Stdout)
-}
-
-const prompt = ">> "
-
-func sendLoop(in io.Reader, out io.Writer) {
-	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		fmt.Print(prompt)
-		if !scanner.Scan() { // blocking
-			return
-		}
-
-		text := scanner.Text()
-
-		io.WriteString(out, "\u001b[33m"+text+"\u001b[0m")
-		io.WriteString(out, "\n")
 	}
 }

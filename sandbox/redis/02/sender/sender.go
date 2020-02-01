@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -21,10 +22,20 @@ var pool = &redis.Pool{
 }
 
 func main() {
+	if len(os.Args) < 3 {
+		fmt.Println("ERROR: not enough args")
+		os.Exit(1)
+	}
+
+	msg := os.Args[1]
+	channels := os.Args[2:]
+
 	fmt.Println("hello, i am sender.")
 
 	c := pool.Get()
 	defer c.Close()
 
-	c.Do("PUBLISH", "my-first-channel", "hello, from sender.")
+	for _, ch := range channels {
+		c.Do("PUBLISH", ch, msg)
+	}
 }
