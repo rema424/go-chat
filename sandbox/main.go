@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"time"
+	"unsafe"
 
 	"github.com/gomodule/redigo/redis"
 )
@@ -24,20 +26,34 @@ var pool = &redis.Pool{
 }
 
 func main() {
-	c := pool.Get()
-	defer c.Close()
-	psc := redis.PubSubConn{Conn: c}
-	defer psc.Close()
+	var s struct{}
+	var b bool
+	fmt.Println(unsafe.Sizeof(s))
+	fmt.Println(unsafe.Sizeof(b))
 
-	if err := psc.Subscribe("test"); err != nil {
-		panic(err)
-	}
+	ms := map[int64]struct{}{}
+	mb := map[int64]bool{}
+	fmt.Println(unsafe.Sizeof(ms))
+	fmt.Println(unsafe.Sizeof(mb))
 
-	for {
+	msv := make(map[int64]struct{}, 1000)
+	mbv := make(map[int64]bool, 1000)
+	fmt.Println(unsafe.Sizeof(msv))
+	fmt.Println(unsafe.Sizeof(mbv))
 
-	}
+	v := reflect.ValueOf(msv)
+	fmt.Println(v.Type().Size())
 
-	sendLoop(os.Stdin, os.Stdout)
+	// c := pool.Get()
+	// defer c.Close()
+	// psc := redis.PubSubConn{Conn: c}
+	// defer psc.Close()
+
+	// if err := psc.Subscribe("test"); err != nil {
+	// 	panic(err)
+	// }
+
+	// sendLoop(os.Stdin, os.Stdout)
 }
 
 const prompt = ">> "
